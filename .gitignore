@@ -1,0 +1,7 @@
+# device snapshots (APKs and app data) - large and private
+pixel*/
+snapshot*/
+*.apk
+__pycache__/
+*.pyc
+.DS_Store
