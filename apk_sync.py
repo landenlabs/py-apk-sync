@@ -7,6 +7,7 @@ Runs on macOS, Linux and Windows (Python 3.9+, standard library only).
 
 An ENDPOINT is either
   * an adb serial      R52X90F9TKF  (USB)   or  192.168.1.42:5555  (Wi-Fi)
+  * dev                the only attached device (error if 0 or 2+ are attached)
   * a local folder     ./snapshot   C:\\apks   (contains a path separator)
 
 Examples
@@ -18,6 +19,7 @@ Examples
   python3 apk_sync.py --cache SERIAL_A ./snapshot    # + cache of debug apps
   python3 apk_sync.py -I --cache SERIAL_A ./snapshot # rerun: only what changed
   python3 apk_sync.py ./snapshot SERIAL_B
+  python3 apk_sync.py dev ./snapshot                 # the one plugged-in device
   python3 apk_sync.py --packages SERIAL_A            # list apps, versions, sizes
   python3 apk_sync.py --packages -v SERIAL_A ./snap  # + debuggable / cache columns
 
@@ -122,6 +124,28 @@ def run(cmd: list[str], timeout: float | None = None, stdout=subprocess.PIPE,
 
 def text(b: bytes | None) -> str:
     return (b or b"").decode("utf-8", "replace").replace("\r", "")
+
+
+DEV_ALIAS = "dev"
+
+
+def resolve_endpoint(adb: str, ep: str) -> str:
+    """Map the alias 'dev' to the serial of the only attached device.
+
+    Write './dev' to mean a folder named dev."""
+    if ep != DEV_ALIAS:
+        return ep
+    out = text(run([adb, "devices"], timeout=15).stdout)
+    rows = [ln.split("\t") for ln in out.splitlines()[1:] if "\t" in ln]
+    ready = [r[0] for r in rows if r[1].strip() == "device"]
+    if len(ready) == 1:
+        return ready[0]
+    if not ready:
+        other = ", ".join(f"{r[0]} ({r[1].strip()})" for r in rows)
+        die(f"'{DEV_ALIAS}': no device attached" + (f"; not ready: {other}" if other else ""))
+    die(f"'{DEV_ALIAS}' needs exactly one attached device, found {len(ready)}: "
+        f"{', '.join(ready)}; use a serial instead")
+    return ""  # unreachable
 
 
 def is_folder(ep: str) -> bool:
@@ -1151,7 +1175,7 @@ def main() -> int:
         description="Sync user-installed APKs (and optionally debug-app cache/data) between Android devices.",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     ap.add_argument("endpoints", nargs="+", metavar="ENDPOINT",
-                    help="SRC DST (adb serial, IP:port, or folder); 'devices'; or one+ endpoints with --packages")
+                    help="SRC DST (adb serial, IP:port, 'dev' = the only attached device, or folder); 'devices'; or one+ endpoints with --packages")
     ap.add_argument("-n", "--dry-run", action="store_true", help="show what would happen")
     ap.add_argument("-b", "--both", action="store_true", help="two-way: SRC->DST then DST->SRC (data: first pass only)")
     ap.add_argument("-o", "--only", metavar="REGEX", help="only packages matching REGEX (re.search)")
@@ -1189,6 +1213,7 @@ def main() -> int:
     adb = find_adb(opts.adb)
     if opts.endpoints == ["devices"]:
         return subprocess.call([adb, "devices", "-l"])
+    opts.endpoints = [resolve_endpoint(adb, ep) for ep in opts.endpoints]
     if opts.endpoints[0] == "check":
         serials = opts.endpoints[1:]
         if not serials:

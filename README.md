@@ -9,9 +9,10 @@
 
 An endpoint can be:
 - an adb serial: a USB device such as `R52X90F9TKF`, or a Wi-Fi device such as `192.168.1.42:5555` (the script runs `adb connect` for you)
+- `dev`: the only attached device. The script exits with an error if no device or more than one device is attached. Write `./dev` to mean a folder named `dev`.
 - a folder: any path that contains `/` or `\`, such as `./snapshot` or `C:\apks`
 
-A folder lets you sync with only one device plugged in at a time: device A → folder, then folder → device B.
+A folder lets you sync with only one device plugged in at a time: device A → folder, then folder → device B. With one device plugged in, `dev` saves you looking up its serial: `python3 apk_sync.py dev ./snapshot`.
 
 ## Examples (macOS tcsh)
 
